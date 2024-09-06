@@ -15,149 +15,174 @@
             background-color: #f0f0f5;
         }
         .game-container {
+            width: 100%;
+            max-width: 400px;
+            padding: 10px;
+            box-sizing: border-box;
             text-align: center;
         }
         h1 {
-            margin-bottom: 20px;
             color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
         }
-        canvas {
+        .board {
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            gap: 2px;
+            margin-bottom: 20px;
+        }
+        .cell {
+            width: 100%;
+            padding-bottom: 100%; /* 1:1 aspect ratio */
+            position: relative;
             background-color: #ddd;
-            cursor: pointer;
+            border: 1px solid #333;
         }
-        .status {
-            margin-top: 10px;
-            font-size: 18px;
+        .cell-content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .black-piece, .white-piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+        }
+        .black-piece {
+            background-color: black;
+        }
+        .white-piece {
+            background-color: white;
         }
         button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 16px;
+            margin-top: 10px;
+            padding: 10px;
+            font-size: 18px;
             background-color: #4a90e2;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            width: 48%;
+            box-sizing: border-box;
         }
         button:hover {
             background-color: #357abd;
+        }
+        .status {
+            margin-top: 10px;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
     <div class="game-container">
-        <h1>Five in a Row</h1>
-        <canvas id="gomokuBoard" width="600" height="600"></canvas>
-        <div class="status" id="status"></div>
-        <button onclick="resetGame()">Restart Game</button>
+        <h1>Five in a Row (Gomoku)</h1>
+        <div class="board" id="board"></div>
+        <div>
+            <button onclick="restartGame()">Restart Game</button>
+        </div>
+        <div class="status" id="status">Black's turn</div>
     </div>
 
     <script>
-        const canvas = document.getElementById('gomokuBoard');
-        const ctx = canvas.getContext('2d');
-        const size = 15; // Board size 15x15
-        const cellSize = canvas.width / size;
-        let board = Array(size).fill(null).map(() => Array(size).fill(null)); // Create 15x15 empty board
+        const boardElement = document.getElementById('board');
+        const statusText = document.getElementById('status');
+        let board = [];
         let currentPlayer = 'black';
         let gameOver = false;
 
-        // Draw the board
-        function drawBoard() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#333';
-            for (let i = 0; i < size; i++) {
-                for (let j = 0; j < size; j++) {
-                    ctx.strokeRect(i * cellSize, j * cellSize, cellSize, cellSize);
-                    if (board[i][j] !== null) {
-                        drawPiece(i, j, board[i][j]);
+        // Initialize the board
+        function initBoard() {
+            board = Array(15).fill(null).map(() => Array(15).fill(null));
+            gameOver = false;
+            renderBoard();
+            statusText.textContent = "Black's turn";
+        }
+
+        // Render the board on the screen
+        function renderBoard() {
+            boardElement.innerHTML = '';
+            for (let row = 0; row < 15; row++) {
+                for (let col = 0; col < 15; col++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    const content = document.createElement('div');
+                    content.classList.add('cell-content');
+                    if (board[row][col]) {
+                        const piece = document.createElement('div');
+                        piece.classList.add(board[row][col] === 'black' ? 'black-piece' : 'white-piece');
+                        content.appendChild(piece);
                     }
+                    cell.appendChild(content);
+                    cell.addEventListener('click', () => handleCellClick(row, col));
+                    boardElement.appendChild(cell);
                 }
             }
         }
 
-        // Draw a piece on the board
-        function drawPiece(x, y, color) {
-            const centerX = (x + 0.5) * cellSize;
-            const centerY = (y + 0.5) * cellSize;
-            const radius = cellSize / 3;
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-            ctx.fillStyle = color;
-            ctx.fill();
-            ctx.closePath();
-        }
-
-        // Check if the game is won
-        function checkWin(x, y, color) {
-            const directions = [
-                { dx: 1, dy: 0 }, // horizontal
-                { dx: 0, dy: 1 }, // vertical
-                { dx: 1, dy: 1 }, // diagonal down-right
-                { dx: 1, dy: -1 } // diagonal up-right
-            ];
-
-            for (const { dx, dy } of directions) {
-                let count = 1;
-                // Check forward direction
-                for (let step = 1; step < 5; step++) {
-                    const newX = x + step * dx;
-                    const newY = y + step * dy;
-                    if (newX >= 0 && newX < size && newY >= 0 && newY < size && board[newX][newY] === color) {
-                        count++;
-                    } else {
-                        break;
-                    }
-                }
-                // Check backward direction
-                for (let step = 1; step < 5; step++) {
-                    const newX = x - step * dx;
-                    const newY = y - step * dy;
-                    if (newX >= 0 && newX < size && newY >= 0 && newY < size && board[newX][newY] === color) {
-                        count++;
-                    } else {
-                        break;
-                    }
-                }
-                if (count >= 5) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        // Handle canvas click
-        canvas.addEventListener('click', (event) => {
-            if (gameOver) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = Math.floor((event.clientX - rect.left) / cellSize);
-            const y = Math.floor((event.clientY - rect.top) / cellSize);
-
-            if (board[x][y] === null) {
-                board[x][y] = currentPlayer;
-                drawBoard();
-
-                if (checkWin(x, y, currentPlayer)) {
-                    document.getElementById('status').textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} wins!`;
+        // Handle cell click to place a piece
+        function handleCellClick(row, col) {
+            if (board[row][col] === null && !gameOver) {
+                board[row][col] = currentPlayer;
+                renderBoard();
+                if (checkWin(row, col, currentPlayer)) {
+                    statusText.textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)} wins!`;
                     gameOver = true;
                 } else {
                     currentPlayer = currentPlayer === 'black' ? 'white' : 'black';
-                    document.getElementById('status').textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s turn`;
+                    statusText.textContent = `${currentPlayer.charAt(0).toUpperCase() + currentPlayer.slice(1)}'s turn`;
                 }
             }
-        });
-
-        // Reset the game
-        function resetGame() {
-            board = Array(size).fill(null).map(() => Array(size).fill(null));
-            currentPlayer = 'black';
-            gameOver = false;
-            document.getElementById('status').textContent = "Black's turn";
-            drawBoard();
         }
 
-        // Initial setup
-        resetGame();
+        // Check if the current player has won
+        function checkWin(row, col, player) {
+            return checkDirection(row, col, player, 1, 0) || // Horizontal
+                   checkDirection(row, col, player, 0, 1) || // Vertical
+                   checkDirection(row, col, player, 1, 1) || // Diagonal \
+                   checkDirection(row, col, player, 1, -1);  // Diagonal /
+        }
+
+        // Check a specific direction for 5 pieces in a row
+        function checkDirection(row, col, player, deltaRow, deltaCol) {
+            let count = 1;
+
+            // Check forward direction
+            for (let i = 1; i < 5; i++) {
+                const newRow = row + deltaRow * i;
+                const newCol = col + deltaCol * i;
+                if (newRow < 0 || newRow >= 15 || newCol < 0 || newCol >= 15 || board[newRow][newCol] !== player) {
+                    break;
+                }
+                count++;
+            }
+
+            // Check backward direction
+            for (let i = 1; i < 5; i++) {
+                const newRow = row - deltaRow * i;
+                const newCol = col - deltaCol * i;
+                if (newRow < 0 || newRow >= 15 || newCol < 0 || newCol >= 15 || board[newRow][newCol] !== player) {
+                    break;
+                }
+                count++;
+            }
+
+            return count >= 5;
+        }
+
+        // Restart the game
+        function restartGame() {
+            initBoard();
+        }
+
+        initBoard();
     </script>
 </body>
 </html>
